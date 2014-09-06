@@ -8,12 +8,14 @@
 
 #import "MainScene.h"
 
+#define MARGIN 20.0f
+#define SPEED 40.0f
+
 @implementation MainScene
 {
     CCNodeColor *_stencil;
     CCLabelTTF *_title;
     CCLabelTTF *_xLabel;
-    CCLabelTTF *_yLabel;
     CCClippingNode *_clippingNode;
     float _increment;
     
@@ -21,6 +23,7 @@
     CCNode *_words;
     
     CGSize _viewSize;
+    CGPoint _clipOrigin;
 }
 
 - (void)didLoadFromCCB
@@ -31,22 +34,18 @@
     NSLog(@"stencil - pos: %@,  size: %@", NSStringFromCGPoint([_stencil positionInPoints]), NSStringFromCGSize([_stencil contentSizeInPoints]));
     
     CCNode *parentNode = [_stencil parent];
+    _clipOrigin = [parentNode convertToWorldSpace:[_stencil positionInPoints]];
     
     _clippingNode = [CCClippingNode clippingNodeWithStencil:_stencil];
-    [_clippingNode setContentSize:[_stencil contentSize]];
-    [_clippingNode setPosition:CGPointZero];
     [_clippingNode setAlphaThreshold:0.0f];
-    [parentNode addChild:_clippingNode];
     
-    NSArray *childrenToMove = [[_stencil children] copy];
-    for (CCNode *k in childrenToMove)
-    {
-        [k removeFromParent];
-        [_clippingNode addChild:k];
-    }
+    [self addChild:_clippingNode];
     
     NSLog(@"clippingNode - pos: %@,  size: %@", NSStringFromCGPoint([_clippingNode positionInPoints]), NSStringFromCGSize([_clippingNode contentSizeInPoints]));
     NSLog(@"label - pos: %@ - size: %@", NSStringFromCGPoint([_title positionInPoints]), NSStringFromCGSize([_title contentSizeInPoints]));
+    
+    _starfield = [CCBReader load:@"Starfield"];
+    _words = [CCBReader load:@"TextLayer"];
 }
 
 - (void)onEnter
@@ -54,65 +53,60 @@
     [super onEnter];
     
     _viewSize = [[CCDirector sharedDirector] viewSize];
+    _increment = SPEED;
+    
+    [self loadContent:_title];
 }
 
-- (void)sliderChanged:(id)sender
+- (void)loadContent:(CCNode *)content
 {
-    NSLog(@"sender: %@", sender);
-    CCSlider *slider = sender;
+    if ([content parent] != nil)
+    {
+        [content removeFromParent];
+    }
+    CCNode *clippedContent = [[_clippingNode children] objectAtIndex:0];
+    [clippedContent removeFromParent];
+    
+    [_clippingNode addChild:content];
+    [content setPositionType:CCPositionTypePoints];
+    [content setPosition:_clipOrigin];
+}
+
+- (void)update:(CCTime)delta
+{
+    float d = delta * _increment;
     CCNode *clippedContent = [[_clippingNode children] objectAtIndex:0];
     CGPoint pos = [clippedContent position];
-    if ([[slider name] isEqualToString:@"topSlider"])
+    pos.y += d;
+    if (pos.y > (_viewSize.height - MARGIN))
     {
-        NSLog(@"x: %0.2f", [slider sliderValue]);
-        float range = _viewSize.width * 2.0f;
-        float offset = _viewSize.width * 0.5f;
-        float xpos = (range * [slider sliderValue]) - offset;
-        pos.x = xpos;
+        pos.y = (_viewSize.height - MARGIN);
+        _increment = -_increment;
     }
-    else
+    else if (pos.y < MARGIN)
     {
-        NSLog(@"y: %0.2f", [slider sliderValue]);
-        float range = _viewSize.height * 2.0f;
-        float offset = _viewSize.height * 0.5f;
-        float ypos = (range * [slider sliderValue]) - offset;
-        pos.y = ypos;
+        pos.y = MARGIN;
+        _increment = -_increment;
     }
     [clippedContent setPosition:pos];
-    [_xLabel setString:[NSString stringWithFormat:@"%d", (int)pos.x]];
-    [_yLabel setString:[NSString stringWithFormat:@"%d", (int)pos.y]];
+    [_xLabel setString:[NSString stringWithFormat:@"%d, %d", (int)pos.x, (int)pos.y]];
 }
 
 - (void)switch:(id)sender
 {
     CCNode *clippedContent = [[_clippingNode children] objectAtIndex:0];
-    [clippedContent removeFromParent];
-    CCNode *switchToContent;
     if (clippedContent == _title)
     {
-        if (_starfield == nil)
-        {
-            _starfield = [CCBReader load:@"Starfield"];
-        }
-        switchToContent = _starfield;
+        [self loadContent:_starfield];
     }
     else if (clippedContent == _starfield)
     {
-        if (_words == nil)
-        {
-            _words = [CCBReader load:@"TextLayer"];
-        }
-        switchToContent = _words;
+        [self loadContent:_words];
     }
     else
     {
-        switchToContent = _title;
+        [self loadContent:_title];
     }
-    if ([switchToContent parent] != nil)
-    {
-        [switchToContent removeFromParent];
-    }
-    [_clippingNode addChild:switchToContent];
 }
 
 @end
